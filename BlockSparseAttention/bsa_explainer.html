@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Block Sparse Attention 原理解析</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #0a0d14; color: #e2e8f0; overflow-x: hidden; }
+
+/* ── 通用 ── */
+.slide { min-height: 100vh; padding: 64px 80px; display: flex; flex-direction: column; justify-content: center; border-bottom: 1px solid #1a2035; position: relative; overflow: hidden; }
+.slide-num { position: absolute; top: 24px; right: 40px; font-size: 12px; color: #4a5568; letter-spacing: 2px; }
+h1 { font-size: 2.6rem; font-weight: 700; line-height: 1.2; }
+h2 { font-size: 1.8rem; font-weight: 600; margin-bottom: 10px; }
+h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; }
+p  { font-size: 0.95rem; line-height: 1.75; color: #94a3b8; margin-bottom: 10px; }
+code { background: #1e2a3a; padding: 2px 7px; border-radius: 4px; font-size: 0.85em; color: #93c5fd; font-family: 'Consolas', monospace; }
+.accent  { color: #60a5fa; }
+.accent2 { color: #34d399; }
+.accent3 { color: #fbbf24; }
+.accent4 { color: #f87171; }
+.accent5 { color: #c084fc; }
+hr { border: none; border-top: 1px solid #1e2a3a; margin: 20px 0; }
+
+/* ── 进度 & 导航 ── */
+.progress { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: #1e2a3a; z-index: 99; }
+.progress-bar { height: 100%; background: linear-gradient(90deg, #60a5fa, #34d399, #fbbf24); width: 0; transition: width 0.2s; }
+.nav { position: fixed; bottom: 24px; right: 32px; display: flex; gap: 8px; z-index: 99; }
+.nav button { background: #1e2a3a; border: 1px solid #2d3f55; color: #94a3b8; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; }
+.nav button:hover { background: #2d3f55; color: #e2e8f0; }
+
+/* ── 卡片 ── */
+.card { background: #111827; border: 1px solid #1e2a3a; border-radius: 12px; padding: 22px; }
+.row  { display: flex; gap: 20px; flex-wrap: wrap; }
+.col  { flex: 1; min-width: 220px; }
+
+/* ─────────────────────────── SLIDE 1 ─── */
+#s1 { background: radial-gradient(ellipse at 30% 50%, #0f1f3d 0%, #0a0d14 70%); align-items: flex-start; }
+#s1 .badge-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 28px; }
+.badge { padding: 5px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+.b1 { background:#0f2744;color:#60a5fa;border:1px solid #1d4ed8; }
+.b2 { background:#064e3b;color:#34d399;border:1px solid #059669; }
+.b3 { background:#451a03;color:#fbbf24;border:1px solid #b45309; }
+.b4 { background:#3b0764;color:#c084fc;border:1px solid #7c3aed; }
+#s1 .sub { font-size:1.1rem;color:#64748b;margin-top:12px; }
+#s1 .overview-boxes { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-top:40px; max-width:900px; }
+.ov-box { background:#111827;border:1px solid #1e2a3a;border-radius:10px;padding:16px;text-align:center; }
+.ov-box .ov-icon { font-size:1.8rem; margin-bottom:6px; }
+.ov-box .ov-step { font-size:0.7rem;color:#64748b;letter-spacing:1px;text-transform:uppercase; }
+.ov-box .ov-name { font-size:0.85rem;font-weight:600;margin-top:4px; }
+.ov-arrow { display:flex;align-items:center;justify-content:center;font-size:1.4rem;color:#2d3f55;padding-top:24px; }
+
+/* ─────────────────────────── SLIDE 2 ─── */
+#s2 { background:#0a0d14; }
+.pool-demo { display:flex;gap:32px;align-items:flex-start;margin-top:24px;flex-wrap:wrap; }
+#poolCanvas { border-radius:10px;background:#0d1220; }
+.pool-explain { flex:1;min-width:280px; }
+.pool-math { background:#0d1220;border-radius:10px;padding:20px;font-family:monospace;font-size:0.88rem;line-height:2;color:#94a3b8; }
+
+/* ─────────────────────────── SLIDE 3 ─── */
+#s3 { background:#0c0f1a; }
+.score-demo { display:flex;gap:32px;align-items:flex-start;margin-top:20px;flex-wrap:wrap; }
+#scoreCanvas { border-radius:10px; }
+.score-steps { flex:1;min-width:280px;display:flex;flex-direction:column;gap:14px; }
+.step-box { background:#111827;border-radius:10px;padding:16px;border-left:3px solid; }
+
+/* ─────────────────────────── SLIDE 4 ─── 交互式稀疏度 */
+#s4 { background:#0a0d14; }
+.sparsity-demo { margin-top:20px; }
+.slider-row { display:flex;align-items:center;gap:16px;margin-bottom:20px;flex-wrap:wrap; }
+.slider-row label { font-size:0.9rem;color:#94a3b8; }
+#sparsitySlider { -webkit-appearance:none;width:280px;height:6px;border-radius:3px;background:#1e2a3a;outline:none; }
+#sparsitySlider::-webkit-slider-thumb { -webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:#60a5fa;cursor:pointer; }
+#sparsityVal { font-size:1.1rem;font-weight:700;color:#60a5fa;min-width:40px; }
+.sparsity-panels { display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start; }
+#interactCanvas { border-radius:10px;flex-shrink:0; }
+.sparsity-stats { flex:1;min-width:260px;display:flex;flex-direction:column;gap:14px; }
+.stat-bar-wrap { background:#111827;border-radius:10px;padding:18px; }
+.stat-label { font-size:0.85rem;color:#94a3b8;margin-bottom:8px; }
+.stat-track { background:#1e2a3a;border-radius:4px;height:22px;overflow:hidden; }
+.stat-fill  { height:100%;border-radius:4px;display:flex;align-items:center;padding-left:8px;font-size:0.78rem;font-weight:600;transition:width 0.4s ease; }
+.topk-explain { background:#111827;border-radius:10px;padding:18px; }
+
+/* ─────────────────────────── SLIDE 5 ─── 首帧保护 */
+#s5 { background:#0c0f1a; }
+#firstframeCanvas { border-radius:10px; }
+.ff-panels { display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;margin-top:20px; }
+.ff-cards { display:flex;flex-direction:column;gap:14px;flex:1;min-width:280px; }
+.ff-card { background:#111827;border-radius:10px;padding:18px;border-left:3px solid; }
+
+/* ─────────────────────────── SLIDE 6 ─── 完整流水线 */
+#s6 { background:#0a0d14; }
+.pipeline-full { margin-top:24px;display:flex;flex-direction:column;gap:16px; }
+.pipe-step { display:flex;gap:20px;align-items:center; }
+.pipe-index { width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.9rem;flex-shrink:0; }
+.pipe-body { flex:1;background:#111827;border-radius:10px;padding:16px 20px;border:1px solid #1e2a3a; }
+.pipe-body h3 { margin-bottom:6px; }
+.pipe-body p { margin:0;font-size:0.88rem; }
+.pipe-in-out { display:flex;gap:8px;margin-top:8px;flex-wrap:wrap; }
+.io-box { padding:4px 10px;border-radius:6px;font-size:0.78rem;font-family:monospace; }
+.io-in  { background:#0f2744;color:#93c5fd;border:1px solid #1d4ed8; }
+.io-out { background:#064e3b;color:#6ee7b7;border:1px solid #059669; }
+
+/* ─────────────────────────── SLIDE 7 ─── skip_timesteps */
+#s7 { background:#0c0f1a; }
+.timestep-row { display:flex;gap:8px;flex-wrap:wrap;margin:24px 0; }
+.ts-card { min-width:72px;border-radius:10px;padding:12px 8px;text-align:center;border:1px solid #1e2a3a; }
+.ts-n    { font-size:0.7rem;color:#64748b;margin-bottom:4px; }
+.ts-icon { font-size:1.4rem;margin-bottom:4px; }
+.ts-type { font-size:0.72rem;font-weight:600; }
+.ts-dense   { background:#111827; }
+.ts-compute { background:#0f2744;border-color:#1d4ed8; }
+.ts-reuse   { background:#064e3b;border-color:#059669; }
+.cache-flow { display:flex;gap:20px;flex-wrap:wrap;margin-top:20px; }
+.cf-box { flex:1;min-width:220px;background:#111827;border-radius:10px;padding:18px;border:1px solid #1e2a3a; }
+
+/* ─────────────────────────── SLIDE 8 ─── 总结 */
+#s8 { background: radial-gradient(ellipse at 70% 40%, #0f1f3d 0%, #0a0d14 70%); }
+.summary-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:24px; }
+.sg-card { background:#111827;border-radius:12px;padding:22px;border:1px solid #1e2a3a; }
+.sg-icon { font-size:1.8rem;margin-bottom:8px; }
+.sg-title { font-weight:700;margin-bottom:8px; }
+</style>
+</head>
+<body>
+<div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+
+<!-- ═══════════════════════════════ S1: 总览 ═══ -->
+<section class="slide" id="s1">
+  <div class="slide-num">01 / 08</div>
+  <h1>Block Sparse Attention<br><span style="background:linear-gradient(90deg,#60a5fa,#34d399,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">原理全解析</span></h1>
+  <p class="sub">从视频 Token 到稀疏掩码——逐步拆解 BSA 的工作方式</p>
+  <div class="badge-row">
+    <span class="badge b1">🗜️ AvgPool 压缩</span>
+    <span class="badge b2">📐 Score 矩阵</span>
+    <span class="badge b3">🎯 TopK 选择</span>
+    <span class="badge b4">⚡ Sparse Kernel</span>
+  </div>
+
+  <div class="overview-boxes">
+    <div class="ov-box"><div class="ov-icon">🎞️</div><div class="ov-step">输入</div><div class="ov-name accent">Q / K / V<br><span style="font-size:0.75rem;color:#64748b">BSND</span></div></div>
+    <div class="ov-arrow">→</div>
+    <div class="ov-box"><div class="ov-icon">🗜️</div><div class="ov-step">Step 1</div><div class="ov-name accent2">空间重排<br>+ AvgPool</div></div>
+    <div class="ov-arrow">→</div>
+    <div class="ov-box"><div class="ov-icon">📐</div><div class="ov-step">Step 2</div><div class="ov-name accent3">Block Score<br>矩阵</div></div>
+    <div class="ov-arrow">→</div>
+    <div class="ov-box"><div class="ov-icon">🎯</div><div class="ov-step">Step 3</div><div class="ov-name accent5">TopK Mask<br>生成</div></div>
+    <div class="ov-arrow">→</div>
+    <div class="ov-box"><div class="ov-icon">⚡</div><div class="ov-step">Step 4</div><div class="ov-name accent4">BSA Kernel<br>稀疏计算</div></div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════ S2: AvgPool ═══ -->
+<section class="slide" id="s2">
+  <div class="slide-num">02 / 08</div>
+  <h2>Step 1：<span class="accent">AvgPool</span> —— 把 Token 序列"粗粒化"</h2>
+  <p>原始序列有 75,348 个 token，直接计算两两 attention 太贵。先用平均池化把每 <span class="accent">128 个 token</span> 压缩成 1 个"代表向量"，只用 <span class="accent2">589 个代表</span> 来决定哪些 block 重要。</p>
+
+  <div class="pool-demo">
+    <canvas id="poolCanvas" width="380" height="260"></canvas>
+    <div class="pool-explain">
+      <div class="card" style="margin-bottom:14px;">
+        <h3 style="color:#60a5fa;margin-bottom:10px;">🔍 池化的直觉</h3>
+        <p style="margin:0;">就像把一段视频先缩略成<strong>缩略图</strong>，用缩略图来判断两帧之间是否"相关"，再决定是否值得精细计算。</p>
+      </div>
+      <div class="pool-math">
+        <div style="color:#64748b;">// BSND input: [B, S, N, D]</div>
+        <div><span style="color:#34d399;">pool_shape</span> = [B, S<span style="color:#fbbf24;">÷128</span>, N, D]</div>
+        <br>
+        <div style="color:#64748b;">// 对每个 block 内取平均</div>
+        <div><span style="color:#60a5fa;">q_pool</span>[b, i, n, :] =</div>
+        <div style="padding-left:16px;">mean( q[b, i*128:(i+1)*128, n, :] )</div>
+        <br>
+        <div style="color:#64748b;">// 75348 tokens → 589 代表向量</div>
+        <div><span style="color:#fbbf24;">75348</span> → <span style="color:#34d399;">589</span> &nbsp;(<span style="color:#64748b;">÷ 128×</span>)</div>
+      </div>
+
+      <div style="margin-top:14px;background:#0f2744;border-radius:10px;padding:16px;border:1px solid #1d4ed8;">
+        <div style="font-size:0.85rem;color:#93c5fd;font-weight:600;margin-bottom:6px;">💡 为什么用平均而不是最大值？</div>
+        <p style="margin:0;font-size:0.85rem;">平均池化保留了整个 block 的"平均语义"，对噪声更鲁棒；最大值会被极端 token 主导，导致 mask 不稳定。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════ S3: Score 矩阵 ═══ -->
+<section class="slide" id="s3">
+  <div class="slide-num">03 / 08</div>
+  <h2>Step 2：计算 <span class="accent3">Block Score 矩阵</span></h2>
+  <p>用池化后的 Q 和 K 做点积，得到 <span class="accent3">589×589</span> 的得分矩阵——每个格子代表"Query Block <em>i</em> 有多需要关注 KV Block <em>j</em>"。</p>
+
+  <div class="score-demo">
+    <canvas id="scoreCanvas" width="340" height="320"></canvas>
+    <div class="score-steps">
+      <div class="step-box" style="border-color:#60a5fa;">
+        <h3 style="color:#60a5fa;">① Einsum 点积</h3>
+        <div style="font-family:monospace;font-size:0.82rem;background:#0d1220;padding:10px;border-radius:6px;line-height:1.7;color:#94a3b8;">
+          score = einsum(<br>
+          &nbsp;&nbsp;"<span style="color:#60a5fa;">b<b>l</b>nd</span>, b<span style="color:#34d399;"><b>s</b></span>nd → bn<b>ls</b>",<br>
+          &nbsp;&nbsp;q_pool, k_pool<br>
+          ) × scale<br>
+          <span style="color:#64748b;">// shape: [B, N, 589, 589]</span>
+        </div>
+        <p style="margin-top:8px;margin-bottom:0;font-size:0.85rem;">每个 attention head 独立计算，得到各自的 block 重要性视图。</p>
+      </div>
+
+      <div class="step-box" style="border-color:#34d399;">
+        <h3 style="color:#34d399;">② Row-wise Softmax</h3>
+        <p style="margin:0;font-size:0.85rem;">对每一行（每个 Query Block）做 softmax，将得分归一化为概率分布，表示"该 Query 的注意力预算分配"。</p>
+        <div style="margin-top:8px;font-family:monospace;font-size:0.82rem;background:#0d1220;padding:8px;border-radius:6px;color:#6ee7b7;">
+          score = softmax(score, dim=-1)<br>
+          <span style="color:#64748b;">// 每行和为 1</span>
+        </div>
+      </div>
+
+      <div class="step-box" style="border-color:#fbbf24;">
+        <h3 style="color:#fbbf24;">③ 结果含义</h3>
+        <p style="margin:0;font-size:0.85rem;">矩阵中<strong style="color:#fbbf24;">亮色格</strong> = 高相关度（值接近 1），<strong style="color:#1e2a3a;">暗格</strong> = 低相关度（接近 0）。下一步用 TopK 选出最重要的亮格保留。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════ S4: TopK + 交互稀疏度 ═══ -->
+<section class="slide" id="s4">
+  <div class="slide-num">04 / 08</div>
+  <h2>Step 3：<span class="accent5">TopK 阈值</span> —— 决定丢弃哪些 Block</h2>
+  <p>对每行按得分排序，保留得分最高的 <code>ceil(kv_blocks × (1 - sparsity))</code> 个 block，其余置 0。<br>拖动下方滑块，直观感受不同稀疏度的效果。</p>
+
+  <div class="sparsity-demo">
+    <div class="slider-row">
+      <label>稀疏度 sparsity =</label>
+      <span id="sparsityVal">0.64</span>
+      <input type="range" id="sparsitySlider" min="0" max="95" value="64" step="1">
+      <span style="font-size:0.85rem;color:#64748b;">（0 = 全保留，0.95 = 仅保留 5%）</span>
+    </div>
+    <div class="sparsity-panels">
+      <canvas id="interactCanvas" width="320" height="320"></canvas>
+      <div class="sparsity-stats">
+        <div class="stat-bar-wrap">
+          <div class="stat-label">保留的 Block 比例（每行）</div>
+          <div class="stat-track">
+            <div class="stat-fill" id="keepBar" style="background:#34d399;color:#065f46;"></div>
+          </div>
+          <div style="margin-top:6px;font-size:0.85rem;color:#94a3b8;">
+            保留 <span id="keepCount" class="accent2"></span> / 589 blocks
+          </div>
+        </div>
+
+        <div class="stat-bar-wrap">
+          <div class="stat-label">裁剪的 Block 比例</div>
+          <div class="stat-track">
+            <div class="stat-fill" id="dropBar" style="background:#f87171;color:#7f1d1d;"></div>
+          </div>
+          <div style="margin-top:6px;font-size:0.85rem;color:#94a3b8;">
+            丢弃 <span id="dropCount" class="accent4"></span> / 589 blocks
+          </div>
+        </div>
+
+        <div class="topk-explain card">
+          <h3 style="color:#c084fc;margin-bottom:10px;">🔢 TopK 选择逻辑</h3>
+          <div style="font-family:monospace;font-size:0.82rem;line-height:1.8;color:#94a3b8;">
+            keep = ceil(589 × (1 - sparsity))<br>
+            <br>
+            topk_vals, _ = topk(score, k=keep)<br>
+            threshold = topk_vals[..., <span style="color:#c084fc;">-1:</span>]<br>
+            mask = score <span style="color:#fbbf24;">>=</span> threshold<br>
+            <span style="color:#64748b;">// bool → int8 [B,N,589,589]</span>
+          </div>
+          <hr style="margin:10px 0;">
+          <p style="margin:0;font-size:0.83rem;color:#64748b;">阈值是第 keep 大的得分值——得分 ≥ 阈值的 block 保留，低于阈值的置 0。每行独立计算，不同 Query Block 保留的 KV 集合可以不同。</p>
+        </div>
+
+        <div id="sparsityPreset" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════ S5: 首帧保护 ═══ -->
+<section class="slide" id="s5">
+  <div class="slide-num">05 / 08</div>
+  <h2><span class="accent3">首帧保护</span>：不可被稀疏掉的锚点</h2>
+  <p>生成掩码后，强制将首帧对应的行与列全部覆写为 1——无论 sparsity 多高，参考帧永远可见。</p>
+
+  <div class="ff-panels">
+    <canvas id="firstframeCanvas" width="340" height="320"></canvas>
+    <div class="ff-cards">
+      <div class="ff-card" style="border-color:#fbbf24;background:#1a1200;">
+        <h3 style="color:#fbbf24;margin-bottom:8px;">为什么首帧必须保留？</h3>
+        <p style="margin:0;font-size:0.88rem;">I2V 模型中第 0 帧是用户输入的<strong>参考图像</strong>，是所有后续帧的"运动起点"。若某帧的 Query 无法关注到参考帧的 Key，模型将失去对原始内容的约束，导致生成结果漂移或与输入不一致。</p>
+      </div>
+      <div class="ff-card" style="border-color:#60a5fa;background:#020f22;">
+        <h3 style="color:#60a5fa;margin-bottom:8px;">代码实现</h3>
+        <div style="font-family:monospace;font-size:0.83rem;line-height:1.9;color:#94a3b8;background:#0d1220;padding:12px;border-radius:8px;">
+          first_blocks = ceil(H×W / 128)<br>
+          <span style="color:#64748b;"># = ceil(69×52 / 128) = 28</span><br>
+          <br>
+          <span style="color:#fbbf24;">mask</span>[:, :, <span style="color:#f87171;">:28</span>, :] = 1<br>
+          <span style="color:#64748b;"># ↑ 所有 Query 都能看首帧 KV</span><br>
+          <br>
+          <span style="color:#fbbf24;">mask</span>[:, :, :, <span style="color:#f87171;">:28</span>] = 1<br>
+          <span style="color:#64748b;"># ↑ 首帧自身也能关注所有 KV</span>
+        </div>
+      </div>
+      <div class="ff-card" style="border-color:#34d399;background:#001a0e;">
+        <h3 style="color:#34d399;margin-bottom:8px;">覆写发生在 TopK 之后</h3>
+        <p style="margin:0;font-size:0.88rem;">TopK 先按内容重要性生成稀疏 mask，<em>然后</em>无条件覆写首帧区域。这样既保证了内容驱动的稀疏化，又保证了参考帧的绝对可见性，两者不互斥。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════ S6: 完整流水线 ═══ -->
+<section class="slide" id="s6">
+  <div class="slide-num">06 / 08</div>
+  <h2>完整流水线：从 Q/K/V 到输出</h2>
+  <p>六个顺序步骤，每步都有对应的 tensor shape 变化。</p>
+
+  <div class="pipeline-full">
+    <div class="pipe-step">
+      <div class="pipe-index" style="background:#1e3a5f;color:#60a5fa;">1</div>
+      <div class="pipe-body">
+        <h3 style="color:#60a5fa;">空间重排（rearrange_with_remaining）</h3>
+        <p>把每帧的 H×W token 从行扫描顺序重组为 8×8 的局部块顺序，使相邻 token 在序列中物理相邻，改善 pool 质量。</p>
+        <div class="pipe-in-out">
+          <span class="io-box io-in">Q/K/V [B, T·H·W, N, D] 行扫描</span>
+          <span style="color:#64748b;padding:4px;">→</span>
+          <span class="io-box io-out">Q'/K'/V' [B, T·H·W, N, D] 块顺序</span>
+        </div>
+      </div>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-index" style="background:#064e3b;color:#34d399;">2</div>
+      <div class="pipe-body">
+        <h3 style="color:#34d399;">AvgPool（pool_size=128）</h3>
+        <p>对重排后的序列做滑动均值池化，每 128 个 token 压缩为 1 个代表向量，同时 concat(Q_pool, K_pool, V_pool) 形成统一 tensor。</p>
+        <div class="pipe-in-out">
+          <span class="io-box io-in">Q'/K'/V' [B, 75348, N, D]</span>
+          <span style="color:#64748b;padding:4px;">→</span>
+          <span class="io-box io-out">qkv_pool [3B, 589, N, D]</span>
+        </div>
+      </div>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-index" style="background:#451a03;color:#fbbf24;">3</div>
+      <div class="pipe-body">
+        <h3 style="color:#fbbf24;">Block Score 矩阵</h3>
+        <p>einsum("blnd, bsnd → bnls") 对池化 Q/K 做点积并 × scale，再做 row-wise softmax，得到每个 head 的 block 注意力分布。</p>
+        <div class="pipe-in-out">
+          <span class="io-box io-in">q_pool/k_pool [B, 589, N, D]</span>
+          <span style="color:#64748b;padding:4px;">→</span>
+          <span class="io-box io-out">score [B, N, 589, 589] float</span>
+        </div>
+      </div>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-index" style="background:#3b0764;color:#c084fc;">4</div>
+      <div class="pipe-body">
+        <h3 style="color:#c084fc;">TopK → int8 Mask（含首帧覆写）</h3>
+        <p>每行取 TopK，得到 bool mask；然后强制首帧行列为 1；最后转 int8 交给 BSA 算子。</p>
+        <div class="pipe-in-out">
+          <span class="io-box io-in">score [B, N, 589, 589]</span>
+          <span style="color:#64748b;padding:4px;">→</span>
+          <span class="io-box io-out">mask [B, N, 589, 589] int8</span>
+        </div>
+      </div>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-index" style="background:#4a1942;color:#f472b6;">5</div>
+      <div class="pipe-body">
+        <h3 style="color:#f472b6;">block_sparse_attention（BNSD）</h3>
+        <p>算子根据 int8 mask 决定计算哪些 (Q_block_i, KV_block_j) 的注意力。mask=0 的组合完全跳过，不参与任何计算（非近似，而是精确稀疏）。</p>
+        <div class="pipe-in-out">
+          <span class="io-box io-in">Q'/K'/V' + mask</span>
+          <span style="color:#64748b;padding:4px;">→</span>
+          <span class="io-box io-out">out [B, S, N, D] BSND</span>
+        </div>
+      </div>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-index" style="background:#1a3a1a;color:#86efac;">6</div>
+      <div class="pipe-body">
+        <h3 style="color:#86efac;">逆重排（_bsa_inv_rearrange）</h3>
+        <p>将 BSA 输出从块顺序恢复为原始行扫描顺序，使 token 位置与输入 Q/K/V 一一对应，后续模块可正常使用。</p>
+        <div class="pipe-in-out">
+          <span class="io-box io-in">out [B, S, N, D] 块顺序</span>
+          <span style="color:#64748b;padding:4px;">→</span>
+          <span class="io-box io-out">out [B, S, N, D] 行扫描</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════ S7: skip_timesteps + 缓存 ═══ -->
+<section class="slide" id="s7">
+  <div class="slide-num">07 / 08</div>
+  <h2><span class="accent">skip_timesteps</span> + <span class="accent2">Mask 缓存</span>：两级优化</h2>
+  <p>去噪过程分两个阶段：早期高噪声步用 Dense Attention 保质量，后期低噪声步用 BSA 提效率；BSA 步内还可复用 mask 进一步减少开销。</p>
+
+  <div class="timestep-row" id="tsRow"></div>
+
+  <div class="cache-flow">
+    <div class="cf-box" style="border-color:#1d4ed8;">
+      <div style="font-size:1.4rem;margin-bottom:8px;">🔵</div>
+      <h3 style="color:#60a5fa;margin-bottom:8px;">Dense 阶段（t &lt; skip_timesteps）</h3>
+      <p style="margin:0;font-size:0.88rem;">噪声大，视频内容还不确定，稀疏 mask 容易选错关键 block。全量注意力确保信息完整传递。此阶段结束时清除 mask 缓存。</p>
+    </div>
+    <div class="cf-box" style="border-color:#b45309;">
+      <div style="font-size:1.4rem;margin-bottom:8px;">🟡</div>
+      <h3 style="color:#fbbf24;margin-bottom:8px;">首个 BSA 步（重新计算 Mask）</h3>
+      <p style="margin:0;font-size:0.88rem;">视频结构已基本稳定，用当前 Q/K pool 生成新 mask，缓存供后续步复用。包含完整的 pool → score → topk → 首帧保护流程。</p>
+    </div>
+    <div class="cf-box" style="border-color:#059669;">
+      <div style="font-size:1.4rem;margin-bottom:8px;">🟢</div>
+      <h3 style="color:#34d399;margin-bottom:8px;">后续 BSA 步（复用 Mask）</h3>
+      <p style="margin:0;font-size:0.88rem;">视频结构变化极小，直接用缓存的 mask，跳过 pool + score + topk 计算。<code>mask_refresh_interval=0</code> 永久复用，<code>N</code> 则每 N 步刷新一次。</p>
+    </div>
+  </div>
+
+  <div style="margin-top:20px;background:#111827;border-radius:12px;padding:20px;max-width:640px;border:1px solid #1e2a3a;">
+    <h3 style="margin-bottom:12px;color:#94a3b8;">⚙️ 参数速查</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:0.85rem;">
+      <div><code>skip_timesteps=5</code></div><div style="color:#94a3b8;">前 5 步用 Dense</div>
+      <div><code>sparsity=0.64</code></div><div style="color:#94a3b8;">保留 36% 的 blocks</div>
+      <div><code>mask_refresh_interval=0</code></div><div style="color:#94a3b8;">首个稀疏步计算，之后永远复用</div>
+      <div><code>mask_refresh_interval=1</code></div><div style="color:#94a3b8;">每步重新计算（等价于不缓存）</div>
+      <div><code>mask_refresh_interval=3</code></div><div style="color:#94a3b8;">每 3 步刷新一次</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════ S8: 总结 ═══ -->
+<section class="slide" id="s8">
+  <div class="slide-num">08 / 08</div>
+  <h2>核心概念总结</h2>
+  <p>BSA 的本质是：用<span class="accent">低成本的粗粒度 Q/K 得分</span>来预测<span class="accent2">精细注意力的稀疏结构</span>，以少量代理计算换取大量实际计算的跳过。</p>
+
+  <div class="summary-grid">
+    <div class="sg-card">
+      <div class="sg-icon">🗜️</div>
+      <div class="sg-title accent">AvgPool</div>
+      <p style="margin:0;font-size:0.85rem;">128 token → 1 代表向量。用"缩略图"决策，而不是全部内容做决策，O(S²) → O((S/B)²) 的代理计算。</p>
+    </div>
+    <div class="sg-card">
+      <div class="sg-icon">📐</div>
+      <div class="sg-title accent3">Score 矩阵</div>
+      <p style="margin:0;font-size:0.85rem;">池化 Q×K 点积 + softmax 得到 block 级注意力分布。每个 head 独立计算，支持不同 head 有不同稀疏结构。</p>
+    </div>
+    <div class="sg-card">
+      <div class="sg-icon">🎯</div>
+      <div class="sg-title accent5">TopK 阈值</div>
+      <p style="margin:0;font-size:0.85rem;">按行取 Top-K，阈值是第 K 大的得分。高于阈值 → mask=1（计算），低于 → mask=0（跳过）。每行保留数量相同，结构规整利于硬件优化。</p>
+    </div>
+    <div class="sg-card">
+      <div class="sg-icon">🔒</div>
+      <div class="sg-title accent3">首帧强制保护</div>
+      <p style="margin:0;font-size:0.85rem;">覆写首帧对应的行列为 1，确保 I2V 参考图像的信息不被稀疏化截断，是精度保障的关键约束。</p>
+    </div>
+    <div class="sg-card">
+      <div class="sg-icon">⚡</div>
+      <div class="sg-title accent2">Sparse Kernel</div>
+      <p style="margin:0;font-size:0.85rem;">int8 mask 直接传给 block_sparse_attention，算子按 block 跳过计算，不是近似而是精确稀疏——mask=0 的组合真正不参与矩阵运算。</p>
+    </div>
+    <div class="sg-card">
+      <div class="sg-icon">♻️</div>
+      <div class="sg-title" style="color:#f472b6;">Mask 缓存</div>
+      <p style="margin:0;font-size:0.85rem;">去噪相邻步的视频结构高度相似，mask 可跨步复用。缓存命中时跳过 pool+score+topk，仅做空间重排后直接调用 BSA kernel。</p>
+    </div>
+  </div>
+
+  <div style="margin-top:28px;background:#064e3b;border-radius:12px;padding:20px;max-width:680px;border:1px solid #059669;">
+    <div style="display:flex;gap:14px;align-items:flex-start;">
+      <div style="font-size:2rem;">🏁</div>
+      <div>
+        <div style="font-weight:700;color:#34d399;margin-bottom:6px;">一句话总结</div>
+        <div style="font-size:0.92rem;color:#94a3b8;">Block Sparse Attention 用"先粗看、再精跳"的策略：池化代理判断重要性 → TopK 生成稀疏 mask → Kernel 精确跳过不重要的 Block → 时序缓存避免重复判断。本质是用 O((S/B)²) 的预筛选，换取 sparsity × O(S²) 的主计算节省。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="nav">
+  <button onclick="navSlide(-1)">↑ 上一页</button>
+  <button onclick="navSlide(1)">↓ 下一页</button>
+</div>
+
+<script>
+// ── 进度条 ────────────────────────────────────
+window.addEventListener('scroll', () => {
+  const h = document.body.scrollHeight - window.innerHeight;
+  document.getElementById('progressBar').style.width = (window.scrollY / h * 100) + '%';
+});
+const slides = document.querySelectorAll('.slide');
+let cur = 0;
+function navSlide(d) {
+  cur = Math.max(0, Math.min(slides.length - 1, cur + d));
+  slides[cur].scrollIntoView({ behavior: 'smooth' });
+}
+
+// ─────────────────── S2: AvgPool 示意图 ──────
+(function() {
+  const cv = document.getElementById('poolCanvas');
+  const ctx = cv.getContext('2d');
+  const W = 380, H = 260;
+
+  // 绘制序列 → 池化 → 代表向量
+  const tokW = 6, tokH = 20, gap = 1;
+  const blockLen = 128, showBlocks = 4, tokensPerShow = 16;
+
+  // 原始序列（前 4 块 × 16 token 缩略显示）
+  ctx.fillStyle = '#64748b';
+  ctx.font = '11px Segoe UI';
+  ctx.fillText('原始 Token 序列（每格 = 1 token，每组 = 128 tokens）', 10, 18);
+
+  const colors = ['#1d4ed8','#059669','#7c3aed','#b45309'];
+  let x = 10;
+  for (let b = 0; b < showBlocks; b++) {
+    for (let t = 0; t < tokensPerShow; t++) {
+      ctx.fillStyle = colors[b] + '99';
+      ctx.fillRect(x, 28, tokW, tokH);
+      x += tokW + gap;
+    }
+    // gap between blocks
+    ctx.fillStyle = '#1e2a3a';
+    ctx.fillRect(x, 28, 4, tokH);
+    x += 8;
+  }
+  ctx.fillStyle = '#64748b';
+  ctx.fillText('... (共 589 块)', x + 4, 42);
+
+  // 箭头 + 操作说明
+  ctx.fillStyle = '#34d399';
+  ctx.font = 'bold 13px Segoe UI';
+  ctx.fillText('↓  AvgPool (每 128 tokens 取均值)', 10, 80);
+
+  // 池化后代表向量
+  ctx.fillStyle = '#64748b';
+  ctx.font = '11px Segoe UI';
+  ctx.fillText('Pool 代表向量（每格 = 1 个 block 的均值向量）', 10, 100);
+  x = 10;
+  for (let b = 0; b < showBlocks; b++) {
+    // 大方块代表 pool vector
+    const grd = ctx.createLinearGradient(x, 108, x + 36, 136);
+    grd.addColorStop(0, colors[b] + 'ee');
+    grd.addColorStop(1, colors[b] + '66');
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.roundRect(x, 108, 36, 28, 6);
+    ctx.fill();
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = 'bold 10px Consolas';
+    ctx.fillText(`B${b}`, x + 11, 126);
+    x += 46;
+  }
+  ctx.fillStyle = '#64748b';
+  ctx.font = '11px Segoe UI';
+  ctx.fillText('... (589 个代表)', x + 4, 126);
+
+  // 示意：128 → 1 的收缩
+  ctx.strokeStyle = '#34d399';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(10, 50); ctx.lineTo(10, 106);
+  ctx.moveTo(10 + tokensPerShow * (tokW + gap) - 2, 50);
+  ctx.lineTo(46, 106);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 说明文字
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '12px Segoe UI';
+  const lines = [
+    '每 128 个 token 的 [N, D] 向量取算术平均',
+    '压缩比：75,348 → 589（× 128 压缩）',
+    '3 × concat(Q_pool, K_pool, V_pool) → qkv_pool [3B, 589, N, D]',
+    '仅用 qkv_pool 来计算 block 级别的重要性分数'
+  ];
+  lines.forEach((l, i) => ctx.fillText(l, 10, 168 + i * 20));
+})();
+
+// ─────────────────── S3: Score 矩阵 ──────────
+(function() {
+  const cv = document.getElementById('scoreCanvas');
+  const ctx = cv.getContext('2d');
+  const N = 28, cell = 340 / N; // 28×28 简化示意
+
+  // 生成模拟得分矩阵（对角线 + 首帧 + 随机稀疏高分）
+  const scores = [];
+  for (let r = 0; r < N; r++) {
+    scores[r] = [];
+    for (let c = 0; c < N; c++) {
+      let v = 0.05 + 0.08 * Math.random();
+      // 对角线附近高分
+      if (Math.abs(r - c) <= 1) v += 0.3;
+      // 一些随机高分
+      if (Math.sin(r * 0.7 + 1) * Math.cos(c * 0.5 + 0.8) > 0.4) v += 0.25;
+      scores[r][c] = v;
+    }
+  }
+  // softmax per row
+  for (let r = 0; r < N; r++) {
+    const max = Math.max(...scores[r]);
+    const exps = scores[r].map(v => Math.exp(v - max));
+    const sum = exps.reduce((a, b) => a + b, 0);
+    scores[r] = exps.map(v => v / sum);
+  }
+
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const v = Math.min(1, scores[r][c] * N * 1.5);
+      const intensity = Math.floor(v * 200);
+      ctx.fillStyle = `rgb(${Math.floor(intensity*0.3)}, ${Math.floor(intensity*0.7)}, ${intensity})`;
+      ctx.fillRect(c * cell, r * cell, cell - 0.5, cell - 0.5);
+    }
+  }
+
+  // 轴标签
+  ctx.fillStyle = '#64748b';
+  ctx.font = '11px Segoe UI';
+  ctx.fillText('← KV Blocks →', 80, N * cell + 14);
+  ctx.save();
+  ctx.translate(N * cell + 14, 80);
+  ctx.rotate(Math.PI / 2);
+  ctx.fillText('← Query Blocks →', 0, 0);
+  ctx.restore();
+  ctx.fillText('Score 矩阵（softmax 后，亮 = 高相关）', 0, N * cell + 28);
+})();
+
+// ─────────────────── S4: 交互式稀疏度 ──────
+const BLOCKS = 24; // 简化为 24×24
+let scoreMatrix = [];
+// 生成固定的"基础得分"矩阵（模拟真实结构）
+for (let r = 0; r < BLOCKS; r++) {
+  scoreMatrix[r] = [];
+  for (let c = 0; c < BLOCKS; c++) {
+    let v = 0.02 + 0.03 * Math.random();
+    if (Math.abs(r - c) <= 1) v += 0.25 + 0.1 * Math.random();
+    if (Math.sin(r * 0.8 + 1.2) * Math.cos(c * 0.6 + 0.5) > 0.35) v += 0.2 + 0.08 * Math.random();
+    if (r < 2 || c < 2) v += 0.3; // 首帧
+    scoreMatrix[r][c] = v;
+  }
+}
+// softmax per row
+for (let r = 0; r < BLOCKS; r++) {
+  const mx = Math.max(...scoreMatrix[r]);
+  const exps = scoreMatrix[r].map(v => Math.exp((v - mx) * 8));
+  const s = exps.reduce((a, b) => a + b, 0);
+  scoreMatrix[r] = exps.map(v => v / s);
+}
+
+function drawInteractive(sparsity) {
+  const cv = document.getElementById('interactCanvas');
+  const ctx = cv.getContext('2d');
+  const cell = 320 / BLOCKS;
+  const keep = Math.ceil(BLOCKS * (1 - sparsity));
+  const FIRST = 2;
+  let totalKept = 0, totalAll = BLOCKS * BLOCKS;
+
+  for (let r = 0; r < BLOCKS; r++) {
+    // find threshold for this row
+    const sorted = [...scoreMatrix[r]].sort((a, b) => b - a);
+    const thresh = sorted[keep - 1] || 0;
+
+    for (let c = 0; c < BLOCKS; c++) {
+      const isFirst = r < FIRST || c < FIRST;
+      const kept = isFirst || scoreMatrix[r][c] >= thresh;
+      if (kept) totalKept++;
+
+      let color;
+      if (isFirst && !(scoreMatrix[r][c] >= thresh)) {
+        color = '#92400e'; // first-frame override (would have been dropped)
+      } else if (isFirst) {
+        color = '#b45309'; // first-frame, naturally kept
+      } else if (kept) {
+        // intensity by score
+        const v = Math.min(1, scoreMatrix[r][c] / sorted[0]);
+        const b = Math.floor(40 + v * 140);
+        color = `rgb(10,${Math.floor(b*0.4)},${b})`;
+      } else {
+        color = '#0d111c';
+      }
+      ctx.fillStyle = color;
+      ctx.fillRect(c * cell, r * cell, cell - 0.5, cell - 0.5);
+    }
+  }
+
+  // first-frame border
+  ctx.strokeStyle = '#fbbf24';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(0, 0, FIRST * cell, BLOCKS * cell);
+  ctx.strokeRect(0, 0, BLOCKS * cell, FIRST * cell);
+
+  // label
+  ctx.fillStyle = '#64748b';
+  ctx.font = '11px Segoe UI';
+  ctx.fillText('(简化 24×24 示意)', 4, BLOCKS * cell + 14);
+
+  return { kept: totalKept, all: totalAll };
+}
+
+function updateSparsity() {
+  const val = parseInt(document.getElementById('sparsitySlider').value) / 100;
+  document.getElementById('sparsityVal').textContent = val.toFixed(2);
+
+  const { kept, all } = drawInteractive(val);
+  const keepPct = (kept / all * 100).toFixed(1);
+  const dropPct = (100 - keepPct).toFixed(1);
+
+  document.getElementById('keepBar').style.width = keepPct + '%';
+  document.getElementById('keepBar').textContent = keepPct + '%';
+  document.getElementById('dropBar').style.width = dropPct + '%';
+  document.getElementById('dropBar').textContent = dropPct + '%';
+
+  const total589 = 589;
+  const k = Math.ceil(total589 * (1 - val));
+  document.getElementById('keepCount').textContent = k;
+  document.getElementById('dropCount').textContent = total589 - k;
+}
+
+document.getElementById('sparsitySlider').addEventListener('input', updateSparsity);
+
+// 预设按钮
+const presets = [0, 0.3, 0.5, 0.64, 0.8, 0.95];
+const presetEl = document.getElementById('sparsityPreset');
+presets.forEach(v => {
+  const btn = document.createElement('button');
+  btn.textContent = (v * 100).toFixed(0) + '%';
+  btn.style.cssText = 'padding:5px 12px;border-radius:6px;border:1px solid #2d3f55;background:#1e2a3a;color:#94a3b8;cursor:pointer;font-size:0.8rem;';
+  btn.onclick = () => {
+    document.getElementById('sparsitySlider').value = v * 100;
+    updateSparsity();
+  };
+  presetEl.appendChild(btn);
+});
+updateSparsity();
+
+// ─────────────────── S5: 首帧保护 ──────────
+(function() {
+  const cv = document.getElementById('firstframeCanvas');
+  const ctx = cv.getContext('2d');
+  const N = 24, cell = 320 / N, FIRST = 2;
+  const sparsity = 0.64;
+  const keep = Math.ceil(N * (1 - sparsity));
+
+  for (let r = 0; r < N; r++) {
+    const sorted = [...scoreMatrix[r]].sort((a, b) => b - a);
+    const thresh = sorted[keep - 1] || 0;
+    for (let c = 0; c < N; c++) {
+      const wouldBeKept = scoreMatrix[r][c] >= thresh;
+      const isFirst = r < FIRST || c < FIRST;
+      let color;
+      if (isFirst && !wouldBeKept) {
+        color = '#92400e'; // saved by first-frame rule
+      } else if (isFirst) {
+        color = '#b45309';
+      } else if (wouldBeKept) {
+        const v = Math.min(1, scoreMatrix[r][c] / sorted[0]);
+        const b = Math.floor(40 + v * 140);
+        color = `rgb(10,${Math.floor(b*0.4)},${b})`;
+      } else {
+        color = '#0d111c';
+      }
+      ctx.fillStyle = color;
+      ctx.fillRect(c * cell, r * cell, cell - 0.5, cell - 0.5);
+    }
+  }
+
+  ctx.strokeStyle = '#fbbf24';
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(0, 0, FIRST * cell, N * cell);
+  ctx.strokeRect(0, 0, N * cell, FIRST * cell);
+
+  // 标注
+  ctx.fillStyle = '#fbbf24';
+  ctx.font = 'bold 10px Segoe UI';
+  ctx.fillText('首帧区', 2, FIRST * cell + 14);
+  ctx.fillText('↑', FIRST * cell / 2 - 4, N * cell - 4);
+
+  ctx.fillStyle = '#92400e';
+  ctx.font = '10px Segoe UI';
+  ctx.fillText('橙色 = 因首帧规则被强制保留（TopK 本会丢弃）', 2, N * cell + 14);
+})();
+
+// ─────────────────── S7: 去噪步骤 ────────────
+(function() {
+  const row = document.getElementById('tsRow');
+  const total = 20, skip = 5;
+  for (let i = 0; i < total; i++) {
+    const card = document.createElement('div');
+    const type = i < skip ? 'dense' : i === skip ? 'compute' : 'reuse';
+    const colors = { dense: ['#64748b','ts-dense'], compute: ['#fbbf24','ts-compute'], reuse: ['#34d399','ts-reuse'] };
+    const icons  = { dense: '🔵', compute: '🟡', reuse: '🟢' };
+    const labels = { dense: 'Dense', compute: '计算\nMask', reuse: '复用\nMask' };
+    card.className = `ts-card ${colors[type][1]}`;
+    card.innerHTML = `<div class="ts-n">t=${i}</div>
+      <div class="ts-icon">${icons[type]}</div>
+      <div class="ts-type" style="color:${colors[type][0]};white-space:pre-line">${labels[type]}</div>`;
+    row.appendChild(card);
+  }
+})();
+</script>
+</body>
+</html>

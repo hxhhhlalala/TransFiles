@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>BSA 参数扫描结果 | 10步 & 40步</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', 'PingFang SC', sans-serif; background: #0f1117; color: #e2e8f0; padding: 24px; }
+
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 6px; color: #f0f4ff; }
+  .subtitle { font-size: 13px; color: #64748b; margin-bottom: 16px; }
+
+  /* ---- Tabs ---- */
+  .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #1e2535; padding-bottom: 0; }
+  .tab-btn {
+    padding: 9px 22px; border-radius: 6px 6px 0 0; border: 1px solid transparent;
+    background: transparent; color: #64748b; font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: all .15s; margin-bottom: -1px;
+  }
+  .tab-btn:hover { color: #cbd5e1; background: #1a2035; }
+  .tab-btn.active {
+    background: #1e2535; color: #7dd3fc; border-color: #1e2535;
+    border-bottom-color: #1e2535;
+  }
+  .tab-btn .tab-badge {
+    display: inline-block; margin-left: 7px; padding: 1px 7px;
+    border-radius: 10px; font-size: 11px; font-weight: 700;
+    background: #1a2535; color: #475569;
+  }
+  .tab-btn.active .tab-badge { background: #0f2040; color: #7dd3fc; }
+
+  /* ---- Baseline banner ---- */
+  .baseline-banner {
+    display: flex; align-items: center; gap: 16px;
+    background: #1e2535; border: 1px solid #334155; border-left: 4px solid #60a5fa;
+    border-radius: 8px; padding: 14px 20px; margin-bottom: 20px;
+  }
+  .baseline-banner .label { font-size: 12px; color: #94a3b8; }
+  .baseline-banner .value { font-size: 22px; font-weight: 700; color: #60a5fa; }
+  .baseline-banner .unit  { font-size: 13px; color: #94a3b8; }
+  .baseline-banner .meta { font-size: 12px; color: #475569; margin-top: 3px; }
+
+  /* ---- Toolbar ---- */
+  .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .toolbar button {
+    padding: 7px 14px; border-radius: 6px; border: 1px solid #334155;
+    background: #1e2535; color: #cbd5e1; font-size: 13px; cursor: pointer; transition: background .15s;
+  }
+  .toolbar button:hover { background: #2d3a52; }
+  .toolbar button.primary { background: #2563eb; border-color: #3b82f6; color: #fff; }
+  .toolbar button.primary:hover { background: #1d4ed8; }
+  .toolbar .hint { font-size: 12px; color: #475569; }
+
+  /* ---- Filter ---- */
+  .filter-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+  .filter-row label { font-size: 12px; color: #64748b; }
+  .filter-row select {
+    background: #1e2535; border: 1px solid #334155; color: #cbd5e1;
+    padding: 5px 10px; border-radius: 5px; font-size: 12px; cursor: pointer;
+  }
+  .filter-row select:focus { outline: none; border-color: #3b82f6; }
+
+  /* ---- Table ---- */
+  .table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid #1e2535; }
+  table { border-collapse: collapse; width: 100%; min-width: 820px; font-size: 13px; }
+  thead th {
+    background: #151b2e; color: #94a3b8; font-weight: 600;
+    padding: 10px 14px; text-align: left; white-space: nowrap;
+    border-bottom: 1px solid #1e2535; position: sticky; top: 0; z-index: 2;
+  }
+  thead th.sortable { cursor: pointer; user-select: none; }
+  thead th.sortable:hover { color: #cbd5e1; }
+  thead th .sort-icon { margin-left: 4px; opacity: .4; }
+  thead th.sorted .sort-icon { opacity: 1; color: #60a5fa; }
+
+  .group-header td {
+    background: #1a2033; color: #7dd3fc; font-weight: 600; font-size: 12px;
+    padding: 7px 14px; border-bottom: 1px solid #1e2535; letter-spacing: .05em;
+  }
+
+  tbody tr.data-row { border-bottom: 1px solid #1a2035; transition: background .1s; }
+  tbody tr.data-row:hover { background: #1a2035; }
+  tbody tr.data-row td { padding: 9px 14px; vertical-align: middle; }
+
+  .case-id { font-family: monospace; font-size: 12px; color: #94a3b8; }
+  .chip { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; font-family: monospace; }
+  .chip-sp  { background: #1e3a5f; color: #7dd3fc; }
+  .chip-st  { background: #1e3d2f; color: #6ee7b7; }
+  .chip-rf  { background: #3b2d1e; color: #fdba74; }
+  .dit-time { font-family: monospace; font-weight: 600; color: #e2e8f0; }
+
+  .speedup-cell { display: flex; align-items: center; gap: 8px; min-width: 140px; }
+  .speedup-val { font-family: monospace; font-weight: 700; font-size: 13px; min-width: 56px; text-align: right; }
+  .speedup-bar-bg { flex: 1; height: 8px; border-radius: 4px; background: #1e2535; overflow: hidden; min-width: 40px; }
+  .speedup-bar-fill { height: 100%; border-radius: 4px; }
+  .positive { color: #4ade80; }
+  .negative { color: #f87171; }
+  .neutral  { color: #94a3b8; }
+
+  .precision-cell {
+    min-width: 120px; max-width: 200px; border-radius: 5px; padding: 5px 8px;
+    font-size: 12px; color: #e2e8f0; border: 1px solid transparent; outline: none;
+    transition: border .15s, background .15s;
+  }
+  .precision-cell:focus { border: 1px solid #3b82f6; background: #1a2540; }
+  .precision-cell[data-filled="true"] { border: 1px solid #1e3a5f; background: #131c2e; color: #7dd3fc; }
+  .precision-cell.pass { border-color: #15803d !important; background: #052e16 !important; color: #4ade80 !important; }
+  .precision-cell.fail { border-color: #9f1239 !important; background: #2d0a14 !important; color: #f87171 !important; }
+  .notes-cell {
+    min-width: 100px; max-width: 180px; border-radius: 5px; padding: 5px 8px;
+    font-size: 12px; color: #94a3b8; border: 1px solid transparent; outline: none;
+    transition: border .15s, background .15s;
+  }
+  .notes-cell:focus { border: 1px solid #475569; background: #1a2035; color: #cbd5e1; }
+
+  /* ---- Stats ---- */
+  .stats-row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 20px; }
+  .stat-card { background: #1e2535; border: 1px solid #334155; border-radius: 8px; padding: 12px 18px; min-width: 160px; }
+  .stat-card .stat-label { font-size: 11px; color: #64748b; margin-bottom: 4px; }
+  .stat-card .stat-value { font-size: 18px; font-weight: 700; color: #f0f4ff; }
+  .stat-card .stat-sub   { font-size: 11px; color: #475569; margin-top: 2px; }
+
+  /* ---- Export ---- */
+  #export-area { display: none; margin-top: 16px; }
+  #export-area textarea {
+    width: 100%; height: 200px; background: #1e2535; color: #94a3b8;
+    border: 1px solid #334155; border-radius: 6px; font-family: monospace;
+    font-size: 12px; padding: 10px; outline: none; resize: vertical;
+  }
+
+  #save-indicator { display: none; font-size: 12px; color: #4ade80; animation: fadein .3s ease; }
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+</style>
+</head>
+<body>
+
+<h1>BSA 参数扫描结果</h1>
+<p class="subtitle">1280×720 · 81帧 · Wan2.2-I2V-A14B-w8a8c8 · 单卡推理</p>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab-btn active" id="tab-10" onclick="switchTab('10')">
+    10步 <span class="tab-badge">37 cases</span>
+  </button>
+  <button class="tab-btn" id="tab-40" onclick="switchTab('40')">
+    40步 <span class="tab-badge">46 cases</span>
+  </button>
+</div>
+
+<!-- Baseline -->
+<div class="baseline-banner">
+  <div>
+    <div class="label">基线（无 BSA）</div>
+    <div><span class="value" id="baseline-val">379.86</span> <span class="unit">s DiT</span></div>
+    <div class="meta" id="baseline-meta">sample_steps=10</div>
+  </div>
+  <div style="border-left:1px solid #334155;height:36px;margin:0 4px"></div>
+  <div>
+    <div class="label">下方加速比</div>
+    <div style="font-size:12px;color:#94a3b8;margin-top:4px">绿色 = 快于基线 · 红色 = 慢于基线</div>
+  </div>
+  <div style="margin-left:auto;font-size:12px;color:#475569" id="save-indicator">✓ 已保存到 localStorage</div>
+</div>
+
+<!-- Toolbar -->
+<div class="toolbar">
+  <button class="primary" onclick="exportCSV()">导出 CSV（含精度）</button>
+  <button onclick="toggleExport()">查看 CSV 预览</button>
+  <button onclick="clearPrecision()" style="color:#f87171">清空精度列</button>
+  <span class="hint">💡 精度 / 备注列可直接点击编辑，自动保存</span>
+</div>
+
+<!-- Filter -->
+<div class="filter-row" id="filter-bar">
+  <label>筛选 sparsity：</label>
+  <select id="filter-sp" onchange="applyFilter()">
+    <option value="">全部</option>
+    <option value="0.5">0.5</option>
+    <option value="0.6">0.6</option>
+    <option value="0.7">0.7</option>
+    <option value="0.8">0.8</option>
+  </select>
+  <label>start_step：</label>
+  <select id="filter-start" onchange="applyFilter()"></select>
+  <label>refresh：</label>
+  <select id="filter-refresh" onchange="applyFilter()">
+    <option value="">全部</option>
+    <option value="0">0（持续复用）</option>
+    <option value="1">1（每步刷新）</option>
+    <option value="2">2（隔步刷新）</option>
+  </select>
+</div>
+
+<!-- Table -->
+<div class="table-wrap">
+<table id="main-table">
+<thead>
+<tr>
+  <th>编号</th>
+  <th>sparsity</th>
+  <th>start_step</th>
+  <th>refresh</th>
+  <th class="sortable" onclick="sortBy('dit')" id="th-dit">DiT 耗时 (s)<span class="sort-icon">↕</span></th>
+  <th class="sortable" onclick="sortBy('speedup')" id="th-speedup">vs 基线<span class="sort-icon">↕</span></th>
+  <th>精度（可编辑）</th>
+  <th>备注（可编辑）</th>
+</tr>
+</thead>
+<tbody id="table-body"></tbody>
+</table>
+</div>
+
+<div class="stats-row" id="stats-row"></div>
+<div id="export-area">
+  <p style="font-size:12px;color:#64748b;margin-bottom:6px">CSV 预览（可全选复制）：</p>
+  <textarea id="export-text" readonly></textarea>
+</div>
+
+<script>
+// ============================================================
+// 数据定义
+// ============================================================
+const DATASETS = {
+  '10': {
+    label: '10步',
+    config: 'sample_steps=10',
+    baseline: 379.8602,
+    startOptions: ['4', '2', '0'],
+    storagePrefix: 'bsa',   // 兼容已有数据
+    data: [
+      {id:'case00',sp:'-',start:'-',refresh:'-',dit:379.8602},
+      {id:'case01',sp:'0.5',start:'4',refresh:'1',dit:403.6711},
+      {id:'case02',sp:'0.5',start:'4',refresh:'2',dit:400.3219},
+      {id:'case03',sp:'0.5',start:'4',refresh:'0',dit:389.8464},
+      {id:'case04',sp:'0.5',start:'2',refresh:'1',dit:398.2491},
+      {id:'case05',sp:'0.5',start:'2',refresh:'2',dit:397.5857},
+      {id:'case06',sp:'0.5',start:'2',refresh:'0',dit:391.6760},
+      {id:'case07',sp:'0.5',start:'0',refresh:'1',dit:404.8510},
+      {id:'case08',sp:'0.5',start:'0',refresh:'2',dit:403.9343},
+      {id:'case09',sp:'0.5',start:'0',refresh:'0',dit:398.1852},
+      {id:'case10',sp:'0.6',start:'4',refresh:'1',dit:375.8111},
+      {id:'case11',sp:'0.6',start:'4',refresh:'2',dit:369.5317},
+      {id:'case12',sp:'0.6',start:'4',refresh:'0',dit:371.3608},
+      {id:'case13',sp:'0.6',start:'2',refresh:'1',dit:371.6839},
+      {id:'case14',sp:'0.6',start:'2',refresh:'2',dit:364.5231},
+      {id:'case15',sp:'0.6',start:'2',refresh:'0',dit:365.3773},
+      {id:'case16',sp:'0.6',start:'0',refresh:'1',dit:370.1066},
+      {id:'case17',sp:'0.6',start:'0',refresh:'2',dit:363.8143},
+      {id:'case18',sp:'0.6',start:'0',refresh:'0',dit:366.0195},
+      {id:'case19',sp:'0.7',start:'4',refresh:'1',dit:357.4270},
+      {id:'case20',sp:'0.7',start:'4',refresh:'2',dit:349.9526},
+      {id:'case21',sp:'0.7',start:'4',refresh:'0',dit:346.8337},
+      {id:'case22',sp:'0.7',start:'2',refresh:'1',dit:342.2563},
+      {id:'case23',sp:'0.7',start:'2',refresh:'2',dit:338.0389},
+      {id:'case24',sp:'0.7',start:'2',refresh:'0',dit:340.3098},
+      {id:'case25',sp:'0.7',start:'0',refresh:'1',dit:332.0298},
+      {id:'case26',sp:'0.7',start:'0',refresh:'2',dit:326.4872},
+      {id:'case27',sp:'0.7',start:'0',refresh:'0',dit:331.3101},
+      {id:'case28',sp:'0.8',start:'4',refresh:'1',dit:330.4279},
+      {id:'case29',sp:'0.8',start:'4',refresh:'2',dit:331.0448},
+      {id:'case30',sp:'0.8',start:'4',refresh:'0',dit:325.8914},
+      {id:'case31',sp:'0.8',start:'2',refresh:'1',dit:313.2432},
+      {id:'case32',sp:'0.8',start:'2',refresh:'2',dit:309.1797},
+      {id:'case33',sp:'0.8',start:'2',refresh:'0',dit:307.0380},
+      {id:'case34',sp:'0.8',start:'0',refresh:'1',dit:294.8029},
+      {id:'case35',sp:'0.8',start:'0',refresh:'2',dit:299.1208},
+      {id:'case36',sp:'0.8',start:'0',refresh:'0',dit:288.9309},
+    ]
+  },
+  '40': {
+    label: '40步',
+    config: 'sample_steps=40',
+    baseline: 1351.0595,
+    startOptions: ['15', '10', '5', '0'],
+    storagePrefix: 'bsa40',
+    data: [
+      {id:'case00',sp:'-',start:'-',refresh:'-',dit:1351.0595},
+      {id:'case01',sp:'0.5',start:'15',refresh:'1',dit:1397.9913},
+      {id:'case02',sp:'0.5',start:'15',refresh:'2',dit:1394.8348},
+      {id:'case03',sp:'0.5',start:'15',refresh:'0',dit:1388.0849},
+      {id:'case04',sp:'0.5',start:'10',refresh:'1',dit:1408.1615},
+      {id:'case05',sp:'0.5',start:'10',refresh:'2',dit:1399.5481},
+      {id:'case06',sp:'0.5',start:'10',refresh:'0',dit:1393.3865},
+      {id:'case07',sp:'0.5',start:'5',refresh:'1',dit:1416.2128},
+      {id:'case08',sp:'0.5',start:'5',refresh:'2',dit:1408.9372},
+      {id:'case09',sp:'0.5',start:'5',refresh:'0',dit:1393.8662},
+      {id:'case10',sp:'0.5',start:'0',refresh:'1',dit:1422.7516},
+      {id:'case11',sp:'0.5',start:'0',refresh:'2',dit:1413.6064},
+      {id:'case12',sp:'0.5',start:'0',refresh:'0',dit:1409.2845},
+      {id:'case13',sp:'0.6',start:'15',refresh:'1',dit:1308.2152},
+      {id:'case14',sp:'0.6',start:'15',refresh:'2',dit:1299.9682},
+      {id:'case15',sp:'0.6',start:'15',refresh:'0',dit:1297.8800},
+      {id:'case16',sp:'0.6',start:'10',refresh:'1',dit:1311.7206},
+      {id:'case17',sp:'0.6',start:'10',refresh:'2',dit:1299.7234},
+      {id:'case18',sp:'0.6',start:'10',refresh:'0',dit:1301.6419},
+      {id:'case19',sp:'0.6',start:'5',refresh:'1',dit:1308.2752},
+      {id:'case20',sp:'0.6',start:'5',refresh:'2',dit:1292.0510},
+      {id:'case21',sp:'0.6',start:'5',refresh:'0',dit:1289.7759},
+      {id:'case22',sp:'0.6',start:'0',refresh:'1',dit:1312.0240},
+      {id:'case23',sp:'0.6',start:'0',refresh:'2',dit:1293.2418},
+      {id:'case24',sp:'0.6',start:'0',refresh:'0',dit:1294.3700},
+      {id:'case25',sp:'0.7',start:'15',refresh:'1',dit:1227.4679},
+      {id:'case26',sp:'0.7',start:'15',refresh:'2',dit:1219.0369},
+      {id:'case27',sp:'0.7',start:'15',refresh:'0',dit:1213.5387},
+      {id:'case28',sp:'0.7',start:'10',refresh:'1',dit:1204.0975},
+      {id:'case29',sp:'0.7',start:'10',refresh:'2',dit:1196.0970},
+      {id:'case30',sp:'0.7',start:'10',refresh:'0',dit:1189.5797},
+      {id:'case31',sp:'0.7',start:'5',refresh:'1',dit:1178.5793},
+      {id:'case32',sp:'0.7',start:'5',refresh:'2',dit:1170.1624},
+      {id:'case33',sp:'0.7',start:'5',refresh:'0',dit:1160.5900},
+      {id:'case34',sp:'0.7',start:'0',refresh:'1',dit:1153.7146},
+      {id:'case35',sp:'0.7',start:'0',refresh:'2',dit:1144.5061},
+      {id:'case36',sp:'0.7',start:'0',refresh:'0',dit:1139.0767},
+      {id:'case37',sp:'0.8',start:'15',refresh:'1',dit:1121.0538},
+      {id:'case38',sp:'0.8',start:'15',refresh:'2',dit:1116.2231},
+      {id:'case39',sp:'0.8',start:'15',refresh:'0',dit:1109.7530},
+      {id:'case40',sp:'0.8',start:'10',refresh:'1',dit:1082.0924},
+      {id:'case41',sp:'0.8',start:'10',refresh:'2',dit:1075.3085},
+      {id:'case42',sp:'0.8',start:'10',refresh:'0',dit:1065.3452},
+      {id:'case43',sp:'0.8',start:'5',refresh:'1',dit:1038.2410},
+      {id:'case44',sp:'0.8',start:'5',refresh:'2',dit:1029.3022},
+      {id:'case45',sp:'0.8',start:'5',refresh:'0',dit:1024.8137},
+    ]
+  }
+};
+
+// ============================================================
+// 状态
+// ============================================================
+let activeTab = '10';
+let sortDir = { dit: 0, speedup: 0 };
+let currentFilter = { sp: '', start: '', refresh: '' };
+let displayData = [];
+
+// ============================================================
+// Tab 切换
+// ============================================================
+function switchTab(steps) {
+  activeTab = steps;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-${steps}`).classList.add('active');
+
+  const ds = DATASETS[steps];
+  document.getElementById('baseline-val').textContent = ds.baseline.toFixed(2);
+  document.getElementById('baseline-meta').textContent = ds.config;
+
+  // 重建 start_step 筛选器
+  const sel = document.getElementById('filter-start');
+  sel.innerHTML = '<option value="">全部</option>';
+  ds.startOptions.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v; opt.textContent = v;
+    sel.appendChild(opt);
+  });
+
+  // 重置筛选状态
+  currentFilter = { sp: '', start: '', refresh: '' };
+  document.getElementById('filter-sp').value = '';
+  sel.value = '';
+  document.getElementById('filter-refresh').value = '';
+
+  sortDir = { dit: 0, speedup: 0 };
+  ['dit','speedup'].forEach(k => {
+    const th = document.getElementById(`th-${k}`);
+    th.classList.remove('sorted');
+    th.querySelector('.sort-icon').textContent = '↕';
+  });
+
+  displayData = [...ds.data];
+  document.getElementById('export-area').style.display = 'none';
+  renderTable();
+}
+
+// ============================================================
+// Storage
+// ============================================================
+function storageKey(id, field) {
+  return `${DATASETS[activeTab].storagePrefix}_${id}_${field}`;
+}
+function getStored(id, field) { return localStorage.getItem(storageKey(id, field)) || ''; }
+function setStored(id, field, val) { localStorage.setItem(storageKey(id, field), val); }
+
+// ============================================================
+// 计算
+// ============================================================
+function speedup(dit) {
+  return (DATASETS[activeTab].baseline - dit) / DATASETS[activeTab].baseline * 100;
+}
+
+function barHtml(pct) {
+  const maxPct = 25;
+  const width = Math.min(100, Math.abs(pct) / maxPct * 100).toFixed(1);
+  const color = pct >= 0 ? '#22c55e' : '#ef4444';
+  const cls = pct > 0.5 ? 'positive' : pct < -0.5 ? 'negative' : 'neutral';
+  const sign = pct > 0.5 ? '+' : '';
+  return `<div class="speedup-cell">
+    <span class="speedup-val ${cls}">${sign}${pct.toFixed(1)}%</span>
+    <div class="speedup-bar-bg"><div class="speedup-bar-fill" style="width:${width}%;background:${color}"></div></div>
+  </div>`;
+}
+
+// ============================================================
+// 渲染
+// ============================================================
+const SP_DESC = { '0.5':'低稀疏','0.6':'中低稀疏','0.7':'中高稀疏','0.8':'高稀疏' };
+let lastGroupSp = null;
+
+function renderTable() {
+  lastGroupSp = null;
+  const tbody = document.getElementById('table-body');
+  tbody.innerHTML = '';
+
+  const filtered = displayData.filter(r => {
+    if (currentFilter.sp && r.sp !== currentFilter.sp) return false;
+    if (currentFilter.start && r.start !== currentFilter.start) return false;
+    if (currentFilter.refresh && r.refresh !== currentFilter.refresh) return false;
+    return true;
+  });
+
+  filtered.forEach(row => {
+    const pct = speedup(row.dit);
+    const isBaseline = row.id === 'case00';
+
+    // group separator
+    if (!isBaseline && !currentFilter.sp && row.sp !== lastGroupSp) {
+      lastGroupSp = row.sp;
+      const gtr = document.createElement('tr');
+      gtr.className = 'group-header';
+      gtr.innerHTML = `<td colspan="8">▸ sparsity = ${row.sp}（${SP_DESC[row.sp] || ''}）</td>`;
+      tbody.appendChild(gtr);
+    }
+
+    const tr = document.createElement('tr');
+    tr.className = 'data-row';
+
+    const spChip = isBaseline ? '<span style="color:#475569">—</span>' : `<span class="chip chip-sp">${row.sp}</span>`;
+    const stChip = isBaseline ? '<span style="color:#475569">—</span>' : `<span class="chip chip-st">${row.start}</span>`;
+    const rfChip = isBaseline ? '<span style="color:#475569">—</span>' : `<span class="chip chip-rf">${row.refresh}</span>`;
+    const speedupHtml = isBaseline
+      ? '<span style="color:#60a5fa;font-size:12px">■ 基线</span>'
+      : barHtml(pct);
+
+    const storedPrec = getStored(row.id, 'precision');
+    const storedNote = getStored(row.id, 'notes');
+    const precClass = 'precision-cell' + (storedPrec
+      ? (storedPrec.match(/PASS|pass|通/i) ? ' pass' : storedPrec.match(/FAIL|fail|差/i) ? ' fail' : '')
+      : '');
+
+    tr.innerHTML = `
+      <td><span class="case-id">${row.id}</span></td>
+      <td>${spChip}</td>
+      <td>${stChip}</td>
+      <td>${rfChip}</td>
+      <td><span class="dit-time">${row.dit.toFixed(2)}</span></td>
+      <td>${speedupHtml}</td>
+      <td><div class="${precClass}" contenteditable="true" data-id="${row.id}" data-field="precision"
+          spellcheck="false" data-filled="${storedPrec ? 'true' : 'false'}"
+          title="可输入: PASS / FAIL / PSNR值 / 主观评分等">${storedPrec}</div></td>
+      <td><div class="notes-cell" contenteditable="true" data-id="${row.id}" data-field="notes"
+          spellcheck="false">${storedNote}</div></td>`;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('[contenteditable]').forEach(el => {
+    el.addEventListener('input', onEdit);
+    el.addEventListener('blur', onEdit);
+  });
+
+  renderStats(filtered);
+}
+
+function onEdit(e) {
+  const el = e.target;
+  const val = el.innerText.trim();
+  setStored(el.dataset.id, el.dataset.field, val);
+  if (el.dataset.field === 'precision') {
+    el.className = 'precision-cell';
+    if (val.match(/PASS|pass|通/i)) el.classList.add('pass');
+    else if (val.match(/FAIL|fail|差/i)) el.classList.add('fail');
+    el.dataset.filled = val ? 'true' : 'false';
+  }
+  showSaved();
+}
+
+function showSaved() {
+  const el = document.getElementById('save-indicator');
+  el.style.display = 'inline';
+  clearTimeout(window._saveTimer);
+  window._saveTimer = setTimeout(() => el.style.display = 'none', 2000);
+}
+
+function renderStats(rows) {
+  const bsaRows = rows.filter(r => r.id !== 'case00');
+  if (!bsaRows.length) { document.getElementById('stats-row').innerHTML = ''; return; }
+  const speedups = bsaRows.map(r => speedup(r.dit));
+  const best = Math.max(...speedups);
+  const worst = Math.min(...speedups);
+  const avg = speedups.reduce((a,b)=>a+b,0)/speedups.length;
+  const bestRow = bsaRows[speedups.indexOf(best)];
+  const positive = speedups.filter(s=>s>0).length;
+
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">最大加速</div>
+      <div class="stat-value" style="color:#4ade80">+${best.toFixed(1)}%</div>
+      <div class="stat-sub">${bestRow.id} · sp=${bestRow.sp}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">最大劣化</div>
+      <div class="stat-value" style="color:${worst<0?'#f87171':'#4ade80'}">${worst>0?'+':''}${worst.toFixed(1)}%</div>
+      <div class="stat-sub">sp=0.5 区间</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">平均加速（当前筛选）</div>
+      <div class="stat-value" style="color:${avg>0?'#4ade80':'#f87171'}">${avg>0?'+':''}${avg.toFixed(1)}%</div>
+      <div class="stat-sub">${bsaRows.length} 个 BSA 用例</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">优于基线用例数</div>
+      <div class="stat-value" style="color:#7dd3fc">${positive} / ${bsaRows.length}</div>
+      <div class="stat-sub">sparsity ≥ 0.6 全部优于基线</div>
+    </div>`;
+}
+
+// ============================================================
+// 排序
+// ============================================================
+function sortBy(key) {
+  sortDir[key] = -sortDir[key] || 1;
+  const other = key === 'dit' ? 'speedup' : 'dit';
+  sortDir[other] = 0;
+  ['dit','speedup'].forEach(k => {
+    const th = document.getElementById(`th-${k}`);
+    th.classList.toggle('sorted', sortDir[k] !== 0);
+    th.querySelector('.sort-icon').textContent = sortDir[k] === 1 ? '↑' : sortDir[k] === -1 ? '↓' : '↕';
+  });
+  displayData = [...DATASETS[activeTab].data].sort((a,b) => {
+    const va = key === 'dit' ? a.dit : speedup(a.dit);
+    const vb = key === 'dit' ? b.dit : speedup(b.dit);
+    return sortDir[key] * (va - vb);
+  });
+  renderTable();
+}
+
+// ============================================================
+// 筛选
+// ============================================================
+function applyFilter() {
+  currentFilter.sp      = document.getElementById('filter-sp').value;
+  currentFilter.start   = document.getElementById('filter-start').value;
+  currentFilter.refresh = document.getElementById('filter-refresh').value;
+  renderTable();
+}
+
+// ============================================================
+// 导出
+// ============================================================
+function exportCSV() {
+  const csv = buildCSV();
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `bsa_results_${activeTab}step.csv`;
+  a.click();
+}
+
+function toggleExport() {
+  const area = document.getElementById('export-area');
+  if (area.style.display === 'block') { area.style.display = 'none'; return; }
+  document.getElementById('export-text').value = buildCSV();
+  area.style.display = 'block';
+}
+
+function buildCSV() {
+  const lines = ['case_name,sparsity,sparse_start_step,mask_refresh_interval,dit_time_s,speedup_pct,precision,notes'];
+  DATASETS[activeTab].data.forEach(r => {
+    const pct = speedup(r.dit).toFixed(2);
+    const prec = (getStored(r.id, 'precision') || '').replace(/,/g,'；');
+    const note = (getStored(r.id, 'notes') || '').replace(/,/g,'；');
+    lines.push([r.id, r.sp, r.start, r.refresh, r.dit.toFixed(4), pct, prec, note].join(','));
+  });
+  return lines.join('\n');
+}
+
+function clearPrecision() {
+  if (!confirm('确认清空当前 Tab 的所有精度和备注？')) return;
+  DATASETS[activeTab].data.forEach(r => {
+    localStorage.removeItem(storageKey(r.id, 'precision'));
+    localStorage.removeItem(storageKey(r.id, 'notes'));
+  });
+  renderTable();
+}
+
+// ============================================================
+// 初始化
+// ============================================================
+switchTab('10');
+</script>
+</body>
+</html>
