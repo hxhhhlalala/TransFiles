@@ -135,7 +135,7 @@
 <body>
 
 <h1>BSA 参数扫描结果</h1>
-<p class="subtitle">1280×720 · 81帧 · Wan2.2-I2V-A14B-w8a8c8 · 单卡推理</p>
+<p class="subtitle" id="page-subtitle">1280×720 · 81帧 · Wan2.2-I2V-A14B-w8a8c8 · 单卡推理</p>
 
 <!-- Tabs -->
 <div class="tabs">
@@ -144,6 +144,9 @@
   </button>
   <button class="tab-btn" id="tab-40" onclick="switchTab('40')">
     40步 <span class="tab-badge">46 cases</span>
+  </button>
+  <button class="tab-btn" id="tab-40w4a4" onclick="switchTab('40w4a4')">
+    40步·w4a4 <span class="tab-badge">46 cases</span>
   </button>
 </div>
 
@@ -224,6 +227,7 @@ const DATASETS = {
   '10': {
     label: '10步',
     config: 'sample_steps=10',
+    subtitle: '1280×720 · 81帧 · Wan2.2-I2V-A14B · <b>w8a8c8 + 稀疏BSA</b> · 单卡推理 · sample_steps=10',
     baseline: 379.8602,
     startOptions: ['4', '2', '0'],
     storagePrefix: 'bsa',   // 兼容已有数据
@@ -270,6 +274,7 @@ const DATASETS = {
   '40': {
     label: '40步',
     config: 'sample_steps=40',
+    subtitle: '1280×720 · 81帧 · Wan2.2-I2V-A14B · <b>w8a8c8 + 稀疏BSA</b> · 单卡推理 · sample_steps=40',
     baseline: 1351.0595,
     startOptions: ['15', '10', '5', '0'],
     storagePrefix: 'bsa40',
@@ -321,6 +326,62 @@ const DATASETS = {
       {id:'case44',sp:'0.8',start:'5',refresh:'2',dit:1029.3022},
       {id:'case45',sp:'0.8',start:'5',refresh:'0',dit:1024.8137},
     ]
+  },
+  '40w4a4': {
+    label: '40步·w4a4',
+    config: 'sample_steps=40 · w4a4',
+    subtitle: '1280×720 · 81帧 · Wan2.2-I2V-A14B · <b>w4a4 + 稀疏BSA</b> · 单卡推理 · sample_steps=40',
+    baseline: 1254.6655,
+    startOptions: ['15', '10', '5', '0'],
+    storagePrefix: 'bsa40w4a4',
+    data: [
+      {id:'case00',sp:'-',start:'-',refresh:'-',dit:1254.6655},
+      {id:'case01',sp:'0.5',start:'15',refresh:'1',dit:1082.4614},
+      {id:'case02',sp:'0.5',start:'15',refresh:'2',dit:1076.4332},
+      {id:'case03',sp:'0.5',start:'15',refresh:'0',dit:1069.6806},
+      {id:'case04',sp:'0.5',start:'10',refresh:'1',dit:1047.8536},
+      {id:'case05',sp:'0.5',start:'10',refresh:'2',dit:1040.6763},
+      {id:'case06',sp:'0.5',start:'10',refresh:'0',dit:1032.6398},
+      {id:'case07',sp:'0.5',start:'5',refresh:'1',dit:1013.2337},
+      {id:'case08',sp:'0.5',start:'5',refresh:'2',dit:1004.5483},
+      {id:'case09',sp:'0.5',start:'5',refresh:'0',dit:995.8651},
+      {id:'case10',sp:'0.5',start:'0',refresh:'1',dit:978.7773},
+      {id:'case11',sp:'0.5',start:'0',refresh:'2',dit:968.5972},
+      {id:'case12',sp:'0.5',start:'0',refresh:'0',dit:959.8121},
+      {id:'case13',sp:'0.6',start:'15',refresh:'1',dit:1011.9129},
+      {id:'case14',sp:'0.6',start:'15',refresh:'2',dit:1006.0777},
+      {id:'case15',sp:'0.6',start:'15',refresh:'0',dit:998.6901},
+      {id:'case16',sp:'0.6',start:'10',refresh:'1',dit:967.9434},
+      {id:'case17',sp:'0.6',start:'10',refresh:'2',dit:961.1061},
+      {id:'case18',sp:'0.6',start:'10',refresh:'0',dit:953.4594},
+      {id:'case19',sp:'0.6',start:'5',refresh:'1',dit:924.5924},
+      {id:'case20',sp:'0.6',start:'5',refresh:'2',dit:916.4074},
+      {id:'case21',sp:'0.6',start:'5',refresh:'0',dit:907.1750},
+      {id:'case22',sp:'0.6',start:'0',refresh:'1',dit:880.6447},
+      {id:'case23',sp:'0.6',start:'0',refresh:'2',dit:870.4043},
+      {id:'case24',sp:'0.6',start:'0',refresh:'0',dit:861.6684},
+      {id:'case25',sp:'0.7',start:'15',refresh:'1',dit:959.0739},
+      {id:'case26',sp:'0.7',start:'15',refresh:'2',dit:953.0480},
+      {id:'case27',sp:'0.7',start:'15',refresh:'0',dit:945.7468},
+      {id:'case28',sp:'0.7',start:'10',refresh:'1',dit:900.6833},
+      {id:'case29',sp:'0.7',start:'10',refresh:'2',dit:893.5723},
+      {id:'case30',sp:'0.7',start:'10',refresh:'0',dit:885.9203},
+      {id:'case31',sp:'0.7',start:'5',refresh:'1',dit:843.0295},
+      {id:'case32',sp:'0.7',start:'5',refresh:'2',dit:834.4653},
+      {id:'case33',sp:'0.7',start:'5',refresh:'0',dit:825.2636},
+      {id:'case34',sp:'0.7',start:'0',refresh:'1',dit:784.7950},
+      {id:'case35',sp:'0.7',start:'0',refresh:'2',dit:774.5912},
+      {id:'case36',sp:'0.7',start:'0',refresh:'0',dit:765.1750},
+      {id:'case37',sp:'0.8',start:'15',refresh:'1',dit:892.1999},
+      {id:'case38',sp:'0.8',start:'15',refresh:'2',dit:888.2140},
+      {id:'case39',sp:'0.8',start:'15',refresh:'0',dit:928.5499},
+      {id:'case40',sp:'0.8',start:'10',refresh:'1',dit:879.1226},
+      {id:'case41',sp:'0.8',start:'10',refresh:'2',dit:817.3897},
+      {id:'case42',sp:'0.8',start:'10',refresh:'0',dit:808.7576},
+      {id:'case43',sp:'0.8',start:'5',refresh:'1',dit:756.6684},
+      {id:'case44',sp:'0.8',start:'5',refresh:'2',dit:747.6132},
+      {id:'case45',sp:'0.8',start:'5',refresh:'0',dit:738.5000},
+    ]
   }
 };
 
@@ -343,6 +404,7 @@ function switchTab(steps) {
   const ds = DATASETS[steps];
   document.getElementById('baseline-val').textContent = ds.baseline.toFixed(2);
   document.getElementById('baseline-meta').textContent = ds.config;
+  document.getElementById('page-subtitle').innerHTML = ds.subtitle;
 
   // 重建 start_step 筛选器
   const sel = document.getElementById('filter-start');
